@@ -347,7 +347,7 @@ export function HomePage() {
         )}
         {/* 左侧目录树 — 桌面端flex布局，移动端fixed覆盖 */}
         <aside
-          className={`bg-[hsl(220 14% 98%)] border-r border-[hsl(var(--border))] flex flex-col transition-all duration-300 md:relative md:z-auto md:shrink-0 ${
+          className={`bg-gray-50 border-r border-[hsl(var(--border))] flex flex-col transition-all duration-300 md:relative md:z-auto md:shrink-0 ${
             sidebarOpen
               ? 'fixed inset-y-0 left-0 w-[260px] z-50 md:static md:w-[260px]'
               : 'hidden md:flex md:w-[260px]'
