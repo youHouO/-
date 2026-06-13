@@ -95,12 +95,22 @@ CREATE TABLE IF NOT EXISTS search_history (
   timestamp INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS trash (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL CHECK(type IN ('book', 'volume', 'note')),
+  name TEXT NOT NULL,
+  parent_id TEXT,
+  deleted_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_volumes_book_id ON volumes(book_id);
 CREATE INDEX IF NOT EXISTS idx_notes_volume_id ON notes(volume_id);
 CREATE INDEX IF NOT EXISTS idx_notes_book_id ON notes(book_id);
 CREATE INDEX IF NOT EXISTS idx_notes_updated_at ON notes(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_images_book_id ON images(book_id);
 CREATE INDEX IF NOT EXISTS idx_images_note_id ON images(note_id);
+CREATE INDEX IF NOT EXISTS idx_trash_expires_at ON trash(expires_at);
 `
 
 /** FTS5 虚拟表建表 SQL */

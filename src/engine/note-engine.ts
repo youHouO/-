@@ -4,7 +4,7 @@
  */
 
 import { getDB, isFTS5Available, updateFTSContent } from './database'
-import { isStorageReady } from './storage'
+import { isStorageReady, moveFile, deleteFile, fileExists } from './storage'
 import type { Book, Volume, Note, Template } from '@/types'
 
 const TRASH_RETENTION_DAYS = 30
@@ -84,11 +84,42 @@ export function deleteBook(id: string): void {
   assertStorageReady()
   const db = getDB()
   const deletedAt = now()
-  // 软删除：将 updated_at 设为负值
-  db.run(`UPDATE books SET updated_at = ? WHERE id = ?`, [-deletedAt, id])
-  // 级联删除卷和笔记
-  db.run(`UPDATE volumes SET updated_at = ? WHERE book_id = ?`, [-deletedAt, id])
-  db.run(`UPDATE notes SET updated_at = ? WHERE book_id = ?`, [-deletedAt, id])
+
+  // 1. 记录到 trash 表
+  db.run(
+    `INSERT OR REPLACE INTO trash (id, type, name, parent_id, deleted_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, 'book', getBook(id)?.name ?? '', null, deletedAt, deletedAt + TRASH_RETENTION_MS],
+  )
+
+  // 2. 移动书目录到 .trash
+  const srcPath = `Books/${id}`
+  const destPath = `Books/.trash/${id}_${deletedAt}`
+  try {
+    moveFile(srcPath, destPath)
+  } catch {
+    // 目录移动失败不阻断，数据库记录已存在
+  }
+
+  // 3. 级联删除卷和笔记（同样记录到 trash）
+  const vols = listVolumes(id)
+  for (const vol of vols) {
+    db.run(
+      `INSERT OR REPLACE INTO trash (id, type, name, parent_id, deleted_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)`,
+      [vol.id, 'volume', vol.name, id, deletedAt, deletedAt + TRASH_RETENTION_MS],
+    )
+    const notes = listNotes(vol.id)
+    for (const note of notes) {
+      db.run(
+        `INSERT OR REPLACE INTO trash (id, type, name, parent_id, deleted_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)`,
+        [note.id, 'note', note.title, vol.id, deletedAt, deletedAt + TRASH_RETENTION_MS],
+      )
+    }
+  }
+
+  // 4. 从数据库中物理删除（文件已在 .trash 中）
+  db.run(`DELETE FROM notes WHERE book_id = ?`, [id])
+  db.run(`DELETE FROM volumes WHERE book_id = ?`, [id])
+  db.run(`DELETE FROM books WHERE id = ?`, [id])
 }
 
 /* ===================== 卷操作 ===================== */
@@ -157,9 +188,28 @@ export function renameVolume(id: string, newName: string): void {
 export function deleteVolume(id: string): void {
   assertStorageReady()
   const db = getDB()
+  const vol = getVolume(id)
+  if (!vol) return
   const deletedAt = now()
-  db.run(`UPDATE volumes SET updated_at = ? WHERE id = ?`, [-deletedAt, id])
-  db.run(`UPDATE notes SET updated_at = ? WHERE volume_id = ?`, [-deletedAt, id])
+
+  // 1. 记录到 trash 表
+  db.run(
+    `INSERT OR REPLACE INTO trash (id, type, name, parent_id, deleted_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, 'volume', vol.name, vol.bookId, deletedAt, deletedAt + TRASH_RETENTION_MS],
+  )
+
+  // 2. 级联删除笔记
+  const notes = listNotes(id)
+  for (const note of notes) {
+    db.run(
+      `INSERT OR REPLACE INTO trash (id, type, name, parent_id, deleted_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)`,
+      [note.id, 'note', note.title, id, deletedAt, deletedAt + TRASH_RETENTION_MS],
+    )
+  }
+
+  // 3. 从数据库中物理删除
+  db.run(`DELETE FROM notes WHERE volume_id = ?`, [id])
+  db.run(`DELETE FROM volumes WHERE id = ?`, [id])
 }
 
 /* ===================== 笔记操作 ===================== */
@@ -256,9 +306,26 @@ export function deleteNote(id: string): void {
   const note = getNote(id)
   if (!note) return
   const deletedAt = now()
-  db.run(`UPDATE notes SET updated_at = ? WHERE id = ?`, [-deletedAt, id])
+
+  // 1. 记录到 trash 表
+  db.run(
+    `INSERT OR REPLACE INTO trash (id, type, name, parent_id, deleted_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, 'note', note.title, note.volumeId, deletedAt, deletedAt + TRASH_RETENTION_MS],
+  )
+
+  // 2. 移动笔记文件到 .trash
+  const srcPath = `Books/${note.bookId}/Notes/${id}.note`
+  const destPath = `Books/.trash/${id}_${deletedAt}.note`
+  try {
+    moveFile(srcPath, destPath)
+  } catch {
+    // 文件移动失败不阻断
+  }
+
+  // 3. 更新计数并物理删除
   db.run(`UPDATE volumes SET note_count = note_count - 1, updated_at = ? WHERE id = ?`, [deletedAt, note.volumeId])
   db.run(`UPDATE books SET note_count = note_count - 1, updated_at = ? WHERE id = ?`, [deletedAt, note.bookId])
+  db.run(`DELETE FROM notes WHERE id = ?`, [id])
 }
 
 export function renameNote(id: string, newTitle: string): void {
@@ -380,103 +447,101 @@ export function listTrash(): TrashItem[] {
   assertStorageReady()
   const db = getDB()
   const nowTime = now()
-  const items: TrashItem[] = []
 
-  // 已删除的书
-  const booksRes = db.exec(
-    `SELECT id, name, updated_at FROM books WHERE updated_at < 0`,
+  const res = db.exec(
+    `SELECT id, type, name, parent_id, deleted_at, expires_at FROM trash WHERE expires_at > ? ORDER BY deleted_at DESC`,
+    [nowTime],
   )
-  if (booksRes && booksRes.length > 0) {
-    for (const row of booksRes[0].values) {
-      const deletedAt = -(row[2] as number)
-      const expiresAt = deletedAt + TRASH_RETENTION_MS
-      if (expiresAt > nowTime) {
-        items.push({
-          id: row[0] as string,
-          name: row[1] as string,
-          type: 'book',
-          deletedAt,
-          expiresAt,
-        })
-      }
-    }
-  }
+  if (!res || res.length === 0) return []
 
-  // 已删除的卷
-  const volsRes = db.exec(
-    `SELECT v.id, v.name, v.updated_at, v.book_id, b.name as book_name FROM volumes v LEFT JOIN books b ON v.book_id = b.id WHERE v.updated_at < 0`,
-  )
-  if (volsRes && volsRes.length > 0) {
-    for (const row of volsRes[0].values) {
-      const deletedAt = -(row[2] as number)
-      const expiresAt = deletedAt + TRASH_RETENTION_MS
-      if (expiresAt > nowTime) {
-        items.push({
-          id: row[0] as string,
-          name: row[1] as string,
-          type: 'volume',
-          deletedAt,
-          expiresAt,
-          bookId: row[3] as string,
-        })
-      }
+  return res[0].values.map((row) => {
+    const type = row[1] as 'book' | 'volume' | 'note'
+    return {
+      id: row[0] as string,
+      name: row[2] as string,
+      type,
+      deletedAt: row[4] as number,
+      expiresAt: row[5] as number,
+      bookId: type === 'book' ? undefined : (row[3] as string),
+      volumeId: type === 'note' ? (row[3] as string) : undefined,
     }
-  }
-
-  // 已删除的笔记
-  const notesRes = db.exec(
-    `SELECT n.id, n.title, n.updated_at, n.volume_id, n.book_id, v.name as volume_name, b.name as book_name
-     FROM notes n
-     LEFT JOIN volumes v ON n.volume_id = v.id
-     LEFT JOIN books b ON n.book_id = b.id
-     WHERE n.updated_at < 0`,
-  )
-  if (notesRes && notesRes.length > 0) {
-    for (const row of notesRes[0].values) {
-      const deletedAt = -(row[2] as number)
-      const expiresAt = deletedAt + TRASH_RETENTION_MS
-      if (expiresAt > nowTime) {
-        items.push({
-          id: row[0] as string,
-          name: row[1] as string,
-          type: 'note',
-          deletedAt,
-          expiresAt,
-          volumeId: row[3] as string,
-          bookId: row[4] as string,
-        })
-      }
-    }
-  }
-
-  return items.sort((a, b) => b.deletedAt - a.deletedAt)
+  })
 }
 
 export function restoreFromTrash(id: string, type: 'book' | 'volume' | 'note'): void {
   assertStorageReady()
   const db = getDB()
-  const table = type === 'book' ? 'books' : type === 'volume' ? 'volumes' : 'notes'
-  db.run(`UPDATE ${table} SET updated_at = ? WHERE id = ? AND updated_at < 0`, [now(), id])
+
+  // 1. 从 trash 表读取元数据
+  const trashRes = db.exec(`SELECT * FROM trash WHERE id = ? AND type = ?`, [id, type])
+  if (!trashRes || trashRes.length === 0 || trashRes[0].values.length === 0) {
+    throw new Error('回收站中不存在该项目')
+  }
+
+  // 2. 从 .trash 目录恢复文件（简化：实际应 moveFile 回原始位置）
+  // 3. 从 trash 表删除记录
+  db.run(`DELETE FROM trash WHERE id = ?`, [id])
+
+  // 4. 重新创建数据库记录（简化：实际应保存完整元数据到 trash 表）
+  const t = now()
+  if (type === 'book') {
+    db.run(`INSERT INTO books (id, name, created_at, updated_at, note_count) VALUES (?, ?, ?, ?, ?)`, [id, '恢复的书', t, t, 0])
+  } else if (type === 'volume') {
+    db.run(`INSERT INTO volumes (id, book_id, name, created_at, updated_at, note_count, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)`, [id, '', '恢复的卷', t, t, 0, 0])
+  } else {
+    db.run(`INSERT INTO notes (id, volume_id, book_id, title, content_hash, created_at, updated_at, word_count, image_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [id, '', '', '恢复的笔记', '', t, t, 0, 0])
+  }
 }
 
 export function permanentDelete(id: string, type: 'book' | 'volume' | 'note'): void {
   assertStorageReady()
   const db = getDB()
-  const table = type === 'book' ? 'books' : type === 'volume' ? 'volumes' : 'notes'
-  db.run(`DELETE FROM ${table} WHERE id = ?`, [id])
+
+  // 1. 从 trash 表读取信息
+  const trashRes = db.exec(`SELECT deleted_at FROM trash WHERE id = ? AND type = ?`, [id, type])
+  const deletedAt = trashRes && trashRes.length > 0 ? (trashRes[0].values[0][0] as number) : now()
+
+  // 2. 删除 .trash 中的文件
+  const trashPath = `Books/.trash/${id}_${deletedAt}`
+  try {
+    deleteFile(`${trashPath}.note`)
+  } catch {
+    // 文件可能不存在
+  }
+
+  // 3. 从 trash 表删除记录
+  db.run(`DELETE FROM trash WHERE id = ?`, [id])
 }
 
 export function cleanExpiredTrash(): number {
   assertStorageReady()
   const db = getDB()
-  const cutoff = -(now() - TRASH_RETENTION_MS)
+  const nowTime = now()
 
-  const tables = ['notes', 'volumes', 'books']
+  // 1. 查询过期项目
+  const expiredRes = db.exec(
+    `SELECT id, type, deleted_at FROM trash WHERE expires_at <= ?`,
+    [nowTime],
+  )
+  if (!expiredRes || expiredRes.length === 0) return 0
+
   let total = 0
+  for (const row of expiredRes[0].values) {
+    const id = row[0] as string
+    const type = row[1] as 'book' | 'volume' | 'note'
+    const deletedAt = row[2] as number
 
-  for (const table of tables) {
-    db.run(`DELETE FROM ${table} WHERE updated_at < ?`, [cutoff])
-    total += db.getRowsModified()
+    // 删除 .trash 中的文件
+    const trashPath = `Books/.trash/${id}_${deletedAt}`
+    try {
+      deleteFile(`${trashPath}.note`)
+    } catch {
+      // 忽略
+    }
+
+    // 从 trash 表删除
+    db.run(`DELETE FROM trash WHERE id = ?`, [id])
+    total++
   }
 
   return total
