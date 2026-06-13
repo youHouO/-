@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LocalNotes 独立解密工具</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; min-height: 100vh; }
+.header { background: #fff; border-bottom: 1px solid #e5e7eb; padding: 16px 24px; }
+.header h1 { font-size: 20px; font-weight: 700; color: #1f2937; }
+.header p { font-size: 13px; color: #9ca3af; margin-top: 4px; }
+.container { max-width: 800px; margin: 0 auto; padding: 32px 24px; }
+.drop-zone { border: 2px dashed #d1d5db; border-radius: 12px; padding: 60px 24px; text-align: center; background: #fff; cursor: pointer; transition: all 0.2s; }
+.drop-zone:hover, .drop-zone.dragover { border-color: #3b82f6; background: #eff6ff; }
+.drop-zone .icon { font-size: 48px; margin-bottom: 16px; }
+.drop-zone h3 { font-size: 18px; font-weight: 600; color: #374151; margin-bottom: 8px; }
+.drop-zone p { font-size: 14px; color: #9ca3af; }
+.results { margin-top: 32px; }
+.result-item { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+.result-item .name { font-size: 14px; font-weight: 600; color: #1f2937; margin-bottom: 8px; }
+.result-item .content { font-size: 14px; line-height: 1.8; white-space: pre-wrap; word-break: break-word; background: #f9fafb; border-radius: 6px; padding: 16px; max-height: 400px; overflow-y: auto; font-family: system-ui, sans-serif; }
+.result-item .size { font-size: 12px; color: #9ca3af; margin-bottom: 4px; }
+.error { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; color: #dc2626; font-size: 14px; margin-bottom: 12px; }
+.success-toast { position: fixed; bottom: 24px; right: 24px; background: #059669; color: #fff; padding: 12px 24px; border-radius: 8px; font-size: 14px; animation: fadeIn 0.3s; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+.note { font-size: 12px; color: #9ca3af; margin-top: 24px; text-align: center; }
+.note a { color: #3b82f6; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🔓 LocalNotes 独立解密工具</h1>
+  <p>拖入 .note 文件或整个文件夹即可解密 · 无需密码 · 完全离线可用 · 代码开源</p>
+</div>
+
+<div class="container">
+  <div class="drop-zone" id="dropZone">
+    <div class="icon">📂</div>
+    <h3>拖拽 .note 文件到此处</h3>
+    <p>或点击选择文件（支持多选）</p>
+    <input type="file" id="fileInput" multiple accept=".note" style="display:none">
+  </div>
+  <div class="results" id="results"></div>
+</div>
+
+<div class="note">
+  本工具使用 Web Crypto API 在浏览器本地解密，不会上传任何数据到服务器。<br>
+  加密算法：AES-256-CTR · 文件格式：[16字节IV][密文]
+</div>
+
+<script>
+// 固定加密密钥（与主软件完全一致）
+const ENCRYPTION_KEY_STRING = 'localnotes-aes-256-ctr-fixed-key-v1';
+
+let cachedKey = null;
+
+async function getKey() {
+  if (cachedKey) return cachedKey;
+  const keyMaterial = new TextEncoder().encode(ENCRYPTION_KEY_STRING);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', keyMaterial);
+  cachedKey = await crypto.subtle.importKey(
+    'raw', hashBuffer, { name: 'AES-CTR' }, false, ['encrypt', 'decrypt']
+  );
+  return cachedKey;
+}
+
+async function decryptFile(file) {
+  const buffer = await file.arrayBuffer();
+  if (buffer.byteLength < 16) {
+    throw new Error('文件格式错误：长度不足');
+  }
+  const data = new Uint8Array(buffer);
+  const iv = data.slice(0, 16);
+  const ciphertext = data.slice(16);
+  const key = await getKey();
+  const plaintext = await crypto.subtle.decrypt(
+    { name: 'AES-CTR', counter: iv, length: 128 },
+    key, ciphertext
+  );
+  return new TextDecoder().decode(plaintext);
+}
+
+function addResult(name, content, size) {
+  const results = document.getElementById('results');
+  const div = document.createElement('div');
+  div.className = 'result-item';
+  div.innerHTML = `
+    <div class="size">${(size / 1024).toFixed(1)} KB</div>
+    <div class="name">📝 ${escapeHtml(name)}</div>
+    <div class="content">${escapeHtml(content)}</div>
+  `;
+  results.appendChild(div);
+}
+
+function addError(name, message) {
+  const results = document.getElementById('results');
+  const div = document.createElement('div');
+  div.className = 'error';
+  div.textContent = `❌ ${escapeHtml(name)}: ${message}`;
+  results.appendChild(div);
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function showToast(message) {
+  const toast = document.createElement('div');
+  toast.className = 'success-toast';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+async function processFiles(files) {
+  const results = document.getElementById('results');
+  results.innerHTML = '';
+  let successCount = 0;
+
+  for (const file of files) {
+    if (!file.name.endsWith('.note')) continue;
+    try {
+      const content = await decryptFile(file);
+      addResult(file.name, content, file.size);
+      successCount++;
+    } catch (err) {
+      addError(file.name, err.message);
+    }
+  }
+
+  if (successCount > 0) {
+    showToast(`✅ 成功解密 ${successCount} 个文件`);
+  }
+}
+
+// 拖拽事件
+const dropZone = document.getElementById('dropZone');
+dropZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dropZone.classList.add('dragover');
+});
+dropZone.addEventListener('dragleave', () => {
+  dropZone.classList.remove('dragover');
+});
+dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZone.classList.remove('dragover');
+  const files = Array.from(e.dataTransfer.files);
+  processFiles(files);
+});
+
+// 点击事件
+dropZone.addEventListener('click', () => {
+  document.getElementById('fileInput').click();
+});
+
+// 文件选择事件
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const files = Array.from(e.target.files);
+  processFiles(files);
+});
+
+// 也支持文件夹拖入（通过 webkitGetAsEntry 递归扫描）
+dropZone.addEventListener('drop', function deepScan(e) {
+  const items = e.dataTransfer.items;
+  if (!items) return;
+
+  const files = [];
+  async function scanEntry(entry) {
+    if (entry.isFile && entry.name.endsWith('.note')) {
+      return new Promise(resolve => {
+        entry.file(file => {
+          files.push(file);
+          resolve();
+        });
+      });
+    } else if (entry.isDirectory) {
+      const reader = entry.createReader();
+      return new Promise(resolve => {
+        reader.readEntries(async entries => {
+          for (const e of entries) {
+            await scanEntry(e);
+          }
+          resolve();
+        });
+      });
+    }
+  }
+
+  const promises = [];
+  for (let i = 0; i < items.length; i++) {
+    const entry = items[i].webkitGetAsEntry?.();
+    if (entry) promises.push(scanEntry(entry));
+  }
+
+  Promise.all(promises).then(() => {
+    if (files.length > 0) processFiles(files);
+  });
+});
+</script>
+
+</body>
+</html>

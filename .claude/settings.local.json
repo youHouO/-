@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls -la \"/c/Users/15184/Desktop/localnotes-scaffold\")",
+      "Read(//c/Users/15184/Desktop/localnotes-scaffold/**)"
+    ]
+  }
+}

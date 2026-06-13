@@ -1,0 +1,22 @@
+{
+  "name": "LocalNotes - 本地优先加密笔记",
+  "short_name": "LocalNotes",
+  "description": "本地优先、加密存储的个人笔记软件",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "prefer_related_applications": false
+}
