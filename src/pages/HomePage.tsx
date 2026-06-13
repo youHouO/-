@@ -16,7 +16,7 @@ import {
   createVolume, listVolumes, renameVolume, deleteVolume,
   createNote, listNotes, deleteNote, renameNote,
 } from '@/engine/note-engine'
-import { initStorage, readFile, writeFile } from '@/engine/storage'
+import { initStorage, readFile, writeFile, getFallbackReason, initStorageWithBackend } from '@/engine/storage'
 import { initDatabase } from '@/engine/database'
 import { createBuiltinNotes } from '@/engine/builtin-notes'
 import { NoteEditor } from '@/components/NoteEditor'
@@ -34,6 +34,7 @@ export function HomePage() {
   const [startupPhase, setStartupPhase] = useState<StartupPhase>('init')
   const [storageReady, setStorageReady] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [fallbackReason, setFallbackReason] = useState<string | null>(null)
 
   // 数据
   const [books, setBooks] = useState<Book[]>([])
@@ -91,6 +92,7 @@ export function HomePage() {
         async (path, data) => { await writeFile(path, data) }
       )
       setStorageReady(true)
+      setFallbackReason(null)
 
       try {
         const existingBooks = listBooks()
@@ -127,8 +129,35 @@ export function HomePage() {
   const handlePickerFallback = async () => {
     setStartupPhase('init')
     setErrorMsg(null)
-    // 降级到 OPFS：强制使用 OPFS 后端重新初始化
-    await doInit()
+    // 强制使用 OPFS 后端
+    try {
+      await initStorageWithBackend('opfs')
+      await initDatabase(
+        async (path) => {
+          try { return await readFile(path) } catch { return null }
+        },
+        async (path, data) => { await writeFile(path, data) }
+      )
+      setStorageReady(true)
+      setFallbackReason(null)
+
+      try {
+        const existingBooks = listBooks()
+        if (existingBooks.length === 0) {
+          setStartupPhase('creating-builtins')
+          await createBuiltinNotes()
+        }
+      } catch (err) {
+        console.error('创建内置笔记失败:', err)
+      }
+
+      loadBooks()
+    } catch (err) {
+      console.error('降级初始化失败:', err)
+      setErrorMsg(err instanceof Error ? err.message : String(err))
+    } finally {
+      setStartupPhase('ready')
+    }
   }
 
   const loadBooks = useCallback(() => {
@@ -307,7 +336,13 @@ export function HomePage() {
 
     // 需要选择存储文件夹
     if (startupPhase === 'picking') {
-      return <WelcomePicker onReady={handlePickerReady} onFallback={handlePickerFallback} />
+      return (
+        <WelcomePicker
+          onReady={handlePickerReady}
+          onFallback={handlePickerFallback}
+          fallbackReason={fallbackReason}
+        />
+      )
     }
 
     // 正在初始化

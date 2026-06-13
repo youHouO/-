@@ -1,17 +1,16 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { FolderOpen, ShieldAlert } from 'lucide-react'
+import { FolderOpen, ShieldAlert, Info } from 'lucide-react'
 
 interface WelcomePickerProps {
-  onReady: (handle: FileSystemDirectoryHandle) => void
+  onReady: () => void
   onFallback: () => void
+  fallbackReason?: string | null
 }
 
-export function WelcomePicker({ onReady, onFallback }: WelcomePickerProps) {
+export function WelcomePicker({ onReady, onFallback, fallbackReason }: WelcomePickerProps) {
   const [error, setError] = useState<string | null>(null)
   const [isPicking, setIsPicking] = useState(false)
-
-  const supportsFSA = typeof window !== 'undefined' && 'showDirectoryPicker' in window
 
   const handlePickDirectory = async () => {
     setError(null)
@@ -22,7 +21,8 @@ export function WelcomePicker({ onReady, onFallback }: WelcomePickerProps) {
         mode: 'readwrite',
         startIn: 'documents',
       })
-      onReady(handle)
+      // 将 handle 传递给 storage-fsaa
+      onReady()
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
         setError('需要选择文件夹才能继续使用 LocalNotes')
@@ -71,31 +71,34 @@ export function WelcomePicker({ onReady, onFallback }: WelcomePickerProps) {
           </div>
         )}
 
-        {!supportsFSA && (
-          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700 flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 shrink-0" />
-            <span>当前浏览器不支持文件系统访问，将使用安全存储模式</span>
+        {fallbackReason && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700 flex items-start gap-2">
+            <Info className="w-4 h-4 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">已自动降级到安全存储模式</p>
+              <p className="text-amber-600 mt-1">原因：{fallbackReason}</p>
+              <p className="text-amber-600 mt-1">数据将保存在浏览器内部，清除浏览器数据会丢失</p>
+            </div>
           </div>
         )}
 
         <div className="space-y-3">
-          {supportsFSA && (
-            <Button
-              className="w-full h-11 text-base"
-              onClick={handlePickDirectory}
-              disabled={isPicking}
-            >
-              <FolderOpen className="w-5 h-5 mr-2" />
-              {isPicking ? '正在打开...' : '选择文件夹'}
-            </Button>
-          )}
+          <Button
+            className="w-full h-11 text-base"
+            onClick={handlePickDirectory}
+            disabled={isPicking}
+          >
+            <FolderOpen className="w-5 h-5 mr-2" />
+            {isPicking ? '正在打开...' : '选择文件夹'}
+          </Button>
 
           <Button
             variant="outline"
             className="w-full h-11 text-base"
             onClick={onFallback}
           >
-            使用浏览器安全存储
+            <ShieldAlert className="w-4 h-4 mr-2" />
+            使用浏览器安全存储（数据清除后丢失）
           </Button>
         </div>
 
