@@ -5,11 +5,24 @@
 
 import { getDB, isFTS5Available, updateFTSContent } from './database'
 import { isStorageReady, moveFile, deleteFile, fileExists, readFile, writeFile } from './storage'
-import { sha256 } from './encryption'
+import { sha256, encryptString, decryptToString } from './encryption'
 import type { Book, Volume, Note, Template } from '@/types'
 
 const TRASH_RETENTION_DAYS = 30
 const TRASH_RETENTION_MS = TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000
+
+/** 是否启用笔记内容加密 */
+let encryptionEnabled = false
+
+/** 设置加密开关 */
+export function setEncryptionEnabled(enabled: boolean): void {
+  encryptionEnabled = enabled
+}
+
+/** 获取加密状态 */
+export function isEncryptionEnabled(): boolean {
+  return encryptionEnabled
+}
 
 function assertStorageReady() {
   if (!isStorageReady()) throw new Error('存储未初始化')
@@ -305,7 +318,17 @@ export async function loadNote(noteId: string): Promise<NoteWithContent> {
   try {
     const data = await readFile(contentPath)
     if (data) {
-      content = new TextDecoder().decode(data)
+      // 检查是否为加密内容
+      if (note.contentHash.startsWith('[ENC]')) {
+        try {
+          content = decryptToString(data)
+        } catch {
+          console.warn(`笔记 ${noteId} 解密失败，返回空内容`)
+          content = ''
+        }
+      } else {
+        content = new TextDecoder().decode(data)
+      }
     }
   } catch {
     // 文件不存在时 content 为空字符串
@@ -320,11 +343,22 @@ export async function saveNote(note: Note, content: string): Promise<void> {
   const t = now()
 
   // 计算内容哈希和字数
-  const contentHash = await computeContentHash(content)
+  let contentHash = await computeContentHash(content)
   const wordCount = content.length
 
   // 统计图片数量（简单的 ![](...) 正则匹配）
   const imageCount = (content.match(/!\[.*?\]\(.*?\)/g) || []).length
+
+  // 写入内容文件到 storage
+  const contentPath = `Books/${note.bookId}/Notes/${note.id}.note`
+  if (encryptionEnabled) {
+    // 加密模式：加密内容后写入 Uint8Array，并在 content_hash 前加 [ENC] 前缀
+    const encryptedData = encryptString(content)
+    await writeFile(contentPath, encryptedData)
+    contentHash = `[ENC]${contentHash}`
+  } else {
+    await writeFile(contentPath, content)
+  }
 
   // 更新数据库元数据
   db.run(
@@ -332,11 +366,7 @@ export async function saveNote(note: Note, content: string): Promise<void> {
     [note.title, contentHash, t, wordCount, imageCount, note.id],
   )
 
-  // 写入内容文件到 storage
-  const contentPath = `Books/${note.bookId}/Notes/${note.id}.note`
-  await writeFile(contentPath, content)
-
-  // 更新 FTS 索引
+  // 更新 FTS 索引（始终使用明文内容，加密后无法搜索）
   try {
     updateFTSContent(note.id, note.title, content)
   } catch {

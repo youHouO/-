@@ -75,7 +75,7 @@
 
 ### 功能完善
 - [ ] image-engine.ts: `syncImages` 实际调用云盘上传 API（需 sync-engine 集成）
-- [ ] encryption.ts: 笔记内容加密存储集成（在 saveNote/loadNote 中集成加解密）
+- [x] encryption.ts: 笔记内容加密存储集成（saveNote/loadNote 加解密，[ENC] 标记）
 
 ### 测试
 - [ ] storage 层集成测试
