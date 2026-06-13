@@ -106,7 +106,7 @@ export function NoteEditor({ noteId, embedded = false, onBack, searchKeyword, se
         id: localPath.split('/').pop() || '', bookId, noteId: noteId || '',
         localPath, size: compressed.size, addedAt: Date.now(),
       })
-      setUnsyncedImages((await import('@/engine/image-engine')).getPendingImageCount())
+      setUnsyncedImages((await import('@/engine/image-engine')).getUnsyncedImageCount())
     } catch (err) { console.error('处理图片失败:', err) }
   }, [bookId, noteId])
 
@@ -116,7 +116,7 @@ export function NoteEditor({ noteId, embedded = false, onBack, searchKeyword, se
     loadNoteData()
     const interval = setInterval(async () => {
       try {
-        setUnsyncedImages((await import('@/engine/image-engine')).getPendingImageCount())
+        setUnsyncedImages((await import('@/engine/image-engine')).getUnsyncedImageCount())
       } catch (err) {
         console.warn('[NoteEditor] 获取未同步图片数失败:', err)
       }
@@ -347,7 +347,17 @@ export function NoteEditor({ noteId, embedded = false, onBack, searchKeyword, se
     }
   }
 
-  const handleBack = () => { if (onBack) onBack(); else navigate('/') }
+  const handleBack = () => {
+    // 退出前检查未同步图片
+    if (unsyncedImages > 3) {
+      const confirmed = window.confirm(`有 ${unsyncedImages} 张图片尚未同步，退出后可能丢失。确定要退出吗？`)
+      if (!confirmed) return
+    } else if (unsyncedImages > 0) {
+      // 0-3 张：直接退出（后续可改为 toast 提示）
+    }
+    if (onBack) onBack()
+    else navigate('/')
+  }
 
   const handleUndo = () => {
     if (editorViewRef.current) undo(editorViewRef.current)
