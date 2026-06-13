@@ -337,18 +337,20 @@ export function HomePage() {
 
     // 正常：单列目录树布局
     return (
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
         {/* 移动端侧边栏遮罩 */}
         {sidebarOpen && (
           <div
-            className="fixed inset-0 bg-black/30 z-20 md:hidden"
+            className="fixed inset-0 bg-black/30 z-40 md:hidden"
             onClick={() => setSidebarOpen(false)}
           />
         )}
-        {/* 左侧目录树 — 移动端可折叠 */}
+        {/* 左侧目录树 — 桌面端flex布局，移动端fixed覆盖 */}
         <aside
-          className={`relative z-30 bg-[hsl(220 14% 98%)] border-r border-[hsl(var(--border))] flex flex-col shrink-0 transition-all duration-300 ${
-            sidebarOpen ? 'w-[260px] md:w-[260px]' : 'w-0 md:w-[260px] overflow-hidden'
+          className={`bg-[hsl(220 14% 98%)] border-r border-[hsl(var(--border))] flex flex-col transition-all duration-300 md:relative md:z-auto md:shrink-0 ${
+            sidebarOpen
+              ? 'fixed inset-y-0 left-0 w-[260px] z-50 md:static md:w-[260px]'
+              : 'hidden md:flex md:w-[260px]'
           }`}
         >
           {/* 新建书按钮 */}

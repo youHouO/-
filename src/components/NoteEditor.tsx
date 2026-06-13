@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Eye, Edit3, MoreHorizontal, Loader2, Maximize2, Minimize2,
-  PanelLeftClose, PanelLeftOpen, Hash, Home, Undo2, Redo2, CalendarPlus,
+  PanelLeftClose, PanelLeftOpen, Hash, Undo2, Redo2, CalendarPlus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DeleteConfirmModal } from '@/components/modals/DeleteConfirmModal'
@@ -390,12 +390,9 @@ export function NoteEditor({ noteId, embedded = false, onBack, searchKeyword, se
     <div className="flex flex-col h-full">
       {/* 工具栏：一行整合所有操作 */}
       <div className="h-10 md:h-10 flex items-center px-2 bg-white border-b border-[hsl(var(--border))] shrink-0">
-        {/* 左侧：返回首页 + 编辑操作按钮 */}
+        {/* 左侧：编辑操作按钮 */}
         <div className="flex items-center gap-0.5 shrink-0">
-          <Button variant="ghost" size="icon" className="h-9 w-9 md:h-7 md:w-7" onClick={handleBack} title="返回首页">
-            <Home className="h-5 w-5 md:h-4 md:w-4" />
-          </Button>
-          {/* 撤销/重做/插入日期（仅编辑模式） - 移到最左侧 */}
+          {/* 撤销/重做/插入日期（仅编辑模式） */}
           {isEditing && (
             <>
               <Button variant="ghost" size="icon"
