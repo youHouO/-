@@ -62,6 +62,7 @@
 - [x] SettingsModal: 所有子页面添加返回按钮
 - [x] SettingsModal: 导出设置对接 export-engine（ZIP 批量导出书列表）
 - [x] NoteEditor: 导出菜单对接 export-engine（Markdown/HTML/PDF）
+- [x] HomePage: 侧边栏补充数据导出/安全加密/数据库管理入口
 - [x] flow1-create-note 冒烟测试修复（mock CREATE TABLE + 参数修正）
 - [x] encryption 冒烟测试修复（AES-CTR 篡改密文行为修正）
 

@@ -4,6 +4,7 @@ import {
   BookOpen, RefreshCw, Settings, Plus, Trash2, FileText,
   MoreHorizontal, FolderOpen, File, ChevronRight, ChevronDown,
   Loader2, Library, Search, Pencil, Archive, Menu, X,
+  Download, Shield, Database,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -58,7 +59,7 @@ export function HomePage() {
   const [renameModalOpen, setRenameModalOpen] = useState(false)
   const [renameTarget, setRenameTarget] = useState<{ id: string; name: string; type: 'book' | 'volume' | 'note' } | null>(null)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
-  const [settingsInitialPage, setSettingsInitialPage] = useState<'trash' | 'templates' | 'cloud' | undefined>(undefined)
+  const [settingsInitialPage, setSettingsInitialPage] = useState<'trash' | 'templates' | 'cloud' | 'export' | 'security' | 'database' | undefined>(undefined)
   const [searchModalOpen, setSearchModalOpen] = useState(false)
   const [deleteModalOpen, setDeleteModalOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; type: 'book' | 'volume' | 'note'; name: string } | null>(null)
@@ -575,6 +576,27 @@ export function HomePage() {
             >
               <FileText className="h-4 w-4" />
               <span>模板管理</span>
+            </button>
+            <button
+              className="flex items-center gap-2.5 h-10 px-4 w-full text-sm text-gray-500 hover:bg-[hsl(var(--muted))] transition-colors"
+              onClick={() => { setSettingsInitialPage('export'); setSettingsModalOpen(true) }}
+            >
+              <Download className="h-4 w-4" />
+              <span>数据导出</span>
+            </button>
+            <button
+              className="flex items-center gap-2.5 h-10 px-4 w-full text-sm text-gray-500 hover:bg-[hsl(var(--muted))] transition-colors"
+              onClick={() => { setSettingsInitialPage('security'); setSettingsModalOpen(true) }}
+            >
+              <Shield className="h-4 w-4" />
+              <span>安全与加密</span>
+            </button>
+            <button
+              className="flex items-center gap-2.5 h-10 px-4 w-full text-sm text-gray-500 hover:bg-[hsl(var(--muted))] transition-colors"
+              onClick={() => { setSettingsInitialPage('database'); setSettingsModalOpen(true) }}
+            >
+              <Database className="h-4 w-4" />
+              <span>数据库管理</span>
             </button>
           </div>
         </aside>
