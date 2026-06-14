@@ -434,7 +434,7 @@ export function HomePage() {
             }}>
               新建书
             </Button>
-            <p className="mt-4 text-sm text-gray-400 cursor-pointer hover:text-[hsl(var(--primary))] transition-colors">
+            <p className="mt-4 text-sm text-gray-400 cursor-pointer hover:text-[hsl(var(--primary))] transition-colors" onClick={() => { setSettingsInitialPage('cloud'); setSettingsModalOpen(true) }}>
               从云盘恢复已有数据
             </p>
           </div>

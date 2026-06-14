@@ -9,7 +9,8 @@ import {
 import { Button } from '@/components/ui/button'
 import {
   listTrash, restoreFromTrash, permanentDelete,
-  listTemplates, deleteTemplate, listBooks,
+  listTemplates, deleteTemplate, listBooks, listVolumes, listNotes,
+  setEncryptionEnabled, isEncryptionEnabled,
 } from '@/engine/note-engine'
 import { getKeyFingerprint, sha256 } from '@/engine/encryption'
 import { exportBookAsZip } from '@/engine/export-engine'
@@ -238,14 +239,32 @@ function CloudSettingsContent() {
   const [newUsername, setNewUsername] = useState('')
   const [newPassword, setNewPassword] = useState('')
 
+  // 从 localStorage 加载服务器列表
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('localnotes_cloud_servers')
+      if (saved) setServers(JSON.parse(saved))
+    } catch { /* ignore */ }
+  }, [])
+
+  // 同步写入 localStorage
+  const persistServers = (list: typeof servers) => {
+    setServers(list)
+    localStorage.setItem('localnotes_cloud_servers', JSON.stringify(list))
+  }
+
   const addServer = () => {
     if (!newName.trim() || !newUrl.trim()) return
-    setServers([...servers, { id: Date.now().toString(), name: newName, url: newUrl, username: newUsername, password: newPassword }])
+    persistServers([...servers, { id: Date.now().toString(), name: newName, url: newUrl, username: newUsername, password: newPassword }])
     setNewName('')
     setNewUrl('')
     setNewUsername('')
     setNewPassword('')
     setShowAdd(false)
+  }
+
+  const removeServer = (id: string) => {
+    persistServers(servers.filter(s => s.id !== id))
   }
 
   return (
@@ -279,7 +298,7 @@ function CloudSettingsContent() {
                 <div className="text-sm font-medium">{s.name}</div>
                 <div className="text-xs text-gray-400 mt-0.5">{s.url}</div>
               </div>
-              <button className="text-xs text-red-400 hover:text-red-500">移除</button>
+              <button className="text-xs text-red-400 hover:text-red-500" onClick={() => removeServer(s.id)}>移除</button>
             </div>
           ))}
         </div>
@@ -395,6 +414,42 @@ function TemplateSettingsContent() {
 function ImageSettingsContent() {
   const [quality, setQuality] = useState(80)
   const [maxWidth, setMaxWidth] = useState(1920)
+  const [keepOriginal, setKeepOriginal] = useState(false)
+
+  // 从 localStorage 加载图片设置
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('localnotes_image_settings')
+      if (saved) {
+        const settings = JSON.parse(saved)
+        if (typeof settings.quality === 'number') setQuality(settings.quality)
+        if (typeof settings.maxWidth === 'number') setMaxWidth(settings.maxWidth)
+        if (typeof settings.keepOriginal === 'boolean') setKeepOriginal(settings.keepOriginal)
+      }
+    } catch { /* ignore */ }
+  }, [])
+
+  // 同步写入 localStorage
+  const persistSettings = (patch: Record<string, unknown>) => {
+    const updated = { quality, maxWidth, keepOriginal, ...patch }
+    localStorage.setItem('localnotes_image_settings', JSON.stringify(updated))
+  }
+
+  const handleQualityChange = (val: number) => {
+    setQuality(val)
+    persistSettings({ quality: val })
+  }
+
+  const handleMaxWidthChange = (val: number) => {
+    setMaxWidth(val)
+    persistSettings({ maxWidth: val })
+  }
+
+  const toggleKeepOriginal = () => {
+    const next = !keepOriginal
+    setKeepOriginal(next)
+    persistSettings({ keepOriginal: next })
+  }
 
   return (
     <div className="space-y-5">
@@ -406,7 +461,7 @@ function ImageSettingsContent() {
             min={10}
             max={100}
             value={quality}
-            onChange={(e) => setQuality(Number(e.target.value))}
+            onChange={(e) => handleQualityChange(Number(e.target.value))}
             className="flex-1 accent-[hsl(var(--primary))]"
           />
           <span className="text-sm text-gray-500 w-10 text-right">{quality}%</span>
@@ -418,7 +473,7 @@ function ImageSettingsContent() {
         <input
           type="number"
           value={maxWidth}
-          onChange={(e) => setMaxWidth(Number(e.target.value))}
+          onChange={(e) => handleMaxWidthChange(Number(e.target.value))}
           className="mt-2 w-full h-9 px-3 rounded-md border border-[hsl(var(--border))] text-sm focus:outline-none focus:border-[hsl(var(--primary))]"
         />
         <p className="text-xs text-gray-400 mt-1">超过此宽度的图片会被等比缩放</p>
@@ -426,11 +481,17 @@ function ImageSettingsContent() {
       <div className="flex items-center justify-between">
         <div>
           <div className="text-sm font-medium">保存原图</div>
-          <div className="text-xs text-amber-600 mt-0.5">⚠️ 开启后大幅增加存储空间和同步时间</div>
+          <div className="text-xs text-amber-600 mt-0.5">开启后大幅增加存储空间和同步时间</div>
         </div>
-        <div className="w-10 h-6 bg-gray-200 rounded-full relative cursor-pointer">
-          <div className="w-4 h-4 bg-white rounded-full absolute top-1 left-1 shadow-sm" />
-        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={keepOriginal}
+          onClick={toggleKeepOriginal}
+          className={`w-10 h-6 rounded-full relative transition-colors ${keepOriginal ? 'bg-[hsl(var(--primary))]' : 'bg-gray-200'}`}
+        >
+          <div className={`w-4 h-4 bg-white rounded-full absolute top-1 shadow-sm transition-transform ${keepOriginal ? 'left-5' : 'left-1'}`} />
+        </button>
       </div>
     </div>
   )
@@ -612,11 +673,14 @@ function ExportSettingsContent() {
 function SecuritySettingsContent() {
   const [keyFingerprint, setKeyFingerprint] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [encryptionOn, setEncryptionOn] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     ;(async () => {
       try {
+        const enabled = isEncryptionEnabled()
+        if (!cancelled) setEncryptionOn(enabled)
         const fp = await getKeyFingerprint()
         if (!cancelled) setKeyFingerprint(fp)
       } catch {
@@ -628,19 +692,49 @@ function SecuritySettingsContent() {
     return () => { cancelled = true }
   }, [])
 
+  const handleToggleEncryption = () => {
+    const next = !encryptionOn
+    try {
+      setEncryptionEnabled(next)
+      setEncryptionOn(next)
+    } catch (err) {
+      alert(`切换加密失败: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
   return (
     <div className="space-y-4">
+      {/* 加密开关 */}
+      <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
+        <div>
+          <div className="text-sm font-medium text-blue-800">端到端加密</div>
+          <div className="text-xs text-blue-600 mt-0.5">
+            {encryptionOn ? '已启用 - 所有笔记数据均使用 AES-256-GCM 加密存储' : '未启用 - 笔记数据以明文存储'}
+          </div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={encryptionOn}
+          onClick={handleToggleEncryption}
+          disabled={loading}
+          className={`w-10 h-6 rounded-full relative transition-colors disabled:opacity-50 ${encryptionOn ? 'bg-[hsl(var(--primary))]' : 'bg-gray-200'}`}
+        >
+          <div className={`w-4 h-4 bg-white rounded-full absolute top-1 shadow-sm transition-transform ${encryptionOn ? 'left-5' : 'left-1'}`} />
+        </button>
+      </div>
+
       {/* 密钥状态 */}
       <div className="p-4 bg-blue-50 rounded-lg">
-        <div className="text-sm font-medium text-blue-800 mb-2">加密状态</div>
+        <div className="text-sm font-medium text-blue-800 mb-2">密钥信息</div>
         {loading ? (
           <div className="text-xs text-blue-600">加载中...</div>
         ) : keyFingerprint ? (
           <div className="text-xs text-blue-600">
-            已启用（密钥指纹: {keyFingerprint}...）
+            密钥指纹: {keyFingerprint}
           </div>
         ) : (
-          <div className="text-xs text-orange-600">未初始化</div>
+          <div className="text-xs text-orange-600">未初始化（启用加密后将自动生成密钥）</div>
         )}
       </div>
 
@@ -660,10 +754,133 @@ function SecuritySettingsContent() {
 }
 
 function DatabaseSettingsContent() {
+  const [stats, setStats] = useState<{ books: number; volumes: number; notes: number } | null>(null)
+  const [indexRebuilding, setIndexRebuilding] = useState(false)
+  const [message, setMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    try {
+      const books = listBooks()
+      let totalVolumes = 0
+      let totalNotes = 0
+      for (const book of books) {
+        const volumes = listVolumes(book.id)
+        totalVolumes += volumes.length
+        for (const vol of volumes) {
+          totalNotes += listNotes(vol.id).length
+        }
+      }
+      setStats({ books: books.length, volumes: totalVolumes, notes: totalNotes })
+    } catch (err) {
+      console.error('加载统计失败:', err)
+    }
+  }, [])
+
+  const handleRebuildIndex = async () => {
+    setIndexRebuilding(true)
+    setMessage(null)
+    try {
+      // 动态导入 database 模块以避免循环依赖
+      const { getDB } = await import('@/engine/database')
+      const database = getDB()
+      if (!database) {
+        setMessage('数据库未初始化')
+        setIndexRebuilding(false)
+        return
+      }
+      // 重建 FTS 索引：删除并重新插入
+      database.run('DELETE FROM notes_fts')
+      const noteRows = database.exec('SELECT id, title, content FROM notes')
+      if (noteRows.length > 0) {
+        const stmt = database.prepare('INSERT INTO notes_fts (note_id, title, content) VALUES (?, ?, ?)')
+        for (const row of noteRows[0].values) {
+          stmt.run([row[0] as string, row[1] as string, row[2] as string])
+        }
+        stmt.free()
+      }
+      setMessage('搜索索引重建完成')
+    } catch (err) {
+      setMessage(`重建失败: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setIndexRebuilding(false)
+    }
+  }
+
+  const handleClearSearchHistory = () => {
+    try {
+      localStorage.removeItem('localnotes_search_history')
+      setMessage('搜索历史已清除')
+    } catch (err) {
+      setMessage(`清除失败: ${err instanceof Error ? err.message : String(err)}`)
+    }
+  }
+
   return (
     <div className="space-y-4">
+      {/* 统计信息 */}
+      <div className="p-4 bg-[hsl(var(--muted))] rounded-lg">
+        <div className="text-sm font-medium mb-3">数据统计</div>
+        {stats ? (
+          <div className="grid grid-cols-3 gap-3">
+            <div className="text-center">
+              <div className="text-lg font-semibold text-[hsl(var(--primary))]">{stats.books}</div>
+              <div className="text-xs text-gray-400">书</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-semibold text-amber-500">{stats.volumes}</div>
+              <div className="text-xs text-gray-400">卷</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-semibold text-emerald-500">{stats.notes}</div>
+              <div className="text-xs text-gray-400">笔记</div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-xs text-gray-400">加载中...</div>
+        )}
+      </div>
+
+      {/* 操作按钮 */}
+      <div className="space-y-2">
+        <button
+          className="w-full flex items-center justify-between p-3 bg-[hsl(var(--muted))] rounded-lg hover:bg-[hsl(var(--muted))]/80 transition-colors disabled:opacity-50"
+          onClick={handleRebuildIndex}
+          disabled={indexRebuilding}
+        >
+          <div className="flex items-center gap-3">
+            <Database className="h-4 w-4 text-gray-500" />
+            <div className="text-left">
+              <div className="text-sm font-medium">重建搜索索引</div>
+              <div className="text-xs text-gray-400">重新构建全文搜索索引数据</div>
+            </div>
+          </div>
+          <span className="text-xs text-gray-400">{indexRebuilding ? '重建中...' : '执行'}</span>
+        </button>
+
+        <button
+          className="w-full flex items-center justify-between p-3 bg-[hsl(var(--muted))] rounded-lg hover:bg-[hsl(var(--muted))]/80 transition-colors"
+          onClick={handleClearSearchHistory}
+        >
+          <div className="flex items-center gap-3">
+            <Trash2 className="h-4 w-4 text-gray-500" />
+            <div className="text-left">
+              <div className="text-sm font-medium">清除搜索历史</div>
+              <div className="text-xs text-gray-400">清空搜索框的历史记录</div>
+            </div>
+          </div>
+          <span className="text-xs text-gray-400">执行</span>
+        </button>
+      </div>
+
+      {/* 操作反馈 */}
+      {message && (
+        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="text-xs text-blue-700">{message}</div>
+        </div>
+      )}
+
       <div className="text-sm text-gray-500 leading-relaxed">
-        数据库状态正常。如需重建索引，请在应用重启后自动完成。
+        数据库状态正常。所有数据均存储在本地，不会上传到任何服务器。
       </div>
     </div>
   )
