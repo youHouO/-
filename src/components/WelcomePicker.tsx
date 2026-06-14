@@ -20,7 +20,6 @@ interface WelcomePickerProps {
 
 type Step = 'welcome' | 'location'
 
-const DEFAULT_PATH = '文档/LocalNotes'
 
 export function WelcomePicker({
   onReady,
@@ -132,46 +131,40 @@ export function WelcomePicker({
         <h1 className="text-2xl font-bold text-gray-900 mb-2">
           选择数据存储位置
         </h1>
-        <p className="text-gray-500 mb-8">
-          LocalNotes 默认将数据存储在以下位置，你也可以选择其他文件夹
+        <p className="text-gray-500 mb-6">
+          点击下方按钮后，系统会弹出文件夹选择器。选择任意文件夹后，LocalNotes 会自动在其中创建 <span className="font-medium text-gray-700">LocalNotes</span> 子文件夹来存放数据。
         </p>
 
-        {/* 默认路径卡片 */}
-        <button
-          onClick={handlePickDirectory}
-          disabled={isPicking}
-          className="w-full text-left bg-blue-50 border-2 border-blue-200 rounded-xl p-5 mb-4 hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center shrink-0">
-              <FolderOpen className="w-6 h-6 text-blue-600" />
+        {/* 说明卡片 */}
+        <div className="w-full bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4">
+          <div className="flex items-start gap-3">
+            <Info className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+            <div className="text-left text-sm text-blue-800">
+              <p className="font-medium">推荐做法</p>
+              <p className="mt-1">在弹出的选择器中选择「文档」文件夹，数据将保存在 <span className="font-semibold">文档/LocalNotes/</span> 下，方便查找和备份。</p>
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-gray-900">{DEFAULT_PATH}</span>
-                <span className="px-2 py-0.5 bg-blue-200 text-blue-700 text-xs font-medium rounded-full">
-                  推荐
-                </span>
-              </div>
-              <p className="text-sm text-gray-500 mt-0.5">
-                方便查找和管理
-              </p>
-            </div>
-            <Check className="w-5 h-5 text-blue-600 shrink-0" />
           </div>
-        </button>
+        </div>
 
-        {/* 选择其他文件夹 */}
+        {/* 选择文件夹按钮 */}
         <button
           onClick={handlePickDirectory}
           disabled={isPicking}
-          className="w-full text-left bg-gray-50 border border-gray-200 rounded-xl p-4 mb-6 hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full text-left bg-white border-2 border-[hsl(var(--primary))] rounded-xl p-4 mb-4 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <div className="flex items-center gap-3">
-            <FolderOpen className="w-5 h-5 text-gray-400" />
-            <span className="text-sm text-gray-600">
-              {isPicking ? '正在打开...' : '选择其他文件夹...'}
-            </span>
+            <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center shrink-0">
+              <FolderOpen className="w-5 h-5 text-blue-600" />
+            </div>
+            <div className="flex-1">
+              <span className="font-semibold text-gray-900">
+                {isPicking ? '请在弹出的窗口中选择文件夹...' : '选择文件夹'}
+              </span>
+              <p className="text-xs text-gray-400 mt-0.5">
+                选择后自动创建 LocalNotes 子文件夹
+              </p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-gray-400 shrink-0" />
           </div>
         </button>
 
