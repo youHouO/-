@@ -9,11 +9,11 @@ import { createBook, createVolume, createNote, saveNote } from './note-engine'
  */
 export async function createBuiltinNotes(): Promise<void> {
   // 创建示例书
-  const book = createBook('欢迎使用 LocalNotes')
+  const book = await createBook('欢迎使用 LocalNotes')
 
   // 创建卷
-  const vol1 = createVolume(book.id, '快速入门')
-  const vol2 = createVolume(book.id, '进阶功能')
+  const vol1 = await createVolume(book.id, '快速入门')
+  const vol2 = await createVolume(book.id, '进阶功能')
 
   // 创建笔记
   const content1 = `# Markdown 编辑功能
@@ -36,7 +36,7 @@ LocalNotes 内置了专业的 Markdown 编辑器，让你专注于写作。
 | 插入日期 | Ctrl+Shift+D |
 
 开始你的创作吧！`
-  const note1 = createNote(vol1.id, 'Markdown 编辑功能', content1)
+  const note1 = await createNote(vol1.id, 'Markdown 编辑功能', content1)
   await saveNote(note1, content1)
 
   const content2 = `# 本地存储与隐私
@@ -65,7 +65,7 @@ Documents/LocalNotes/
 ## 加密支持
 
 可选启用 AES-256-GCM 加密，保护敏感笔记。`
-  const note2 = createNote(vol1.id, '本地存储与隐私', content2)
+  const note2 = await createNote(vol1.id, '本地存储与隐私', content2)
   await saveNote(note2, content2)
 
   const content3 = `# 云同步设置
@@ -91,6 +91,6 @@ LocalNotes 支持多种云盘同步：
 - 自动同步：编辑后 30 秒自动上传
 - 手动同步：点击工具栏同步按钮
 - 冲突处理：保留较新版本，旧版本存入冲突目录`
-  const note3 = createNote(vol2.id, '云同步设置', content3)
+  const note3 = await createNote(vol2.id, '云同步设置', content3)
   await saveNote(note3, content3)
 }

@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS notes (
   book_id TEXT NOT NULL,
   title TEXT NOT NULL,
   content_hash TEXT NOT NULL DEFAULT '',
+  content_preview TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   word_count INTEGER NOT NULL DEFAULT 0,
@@ -168,6 +169,7 @@ function runMigrations(): void {
     { table: 'images', column: 'synced_at', type: 'INTEGER', default: 'NULL' },
     { table: 'volumes', column: 'note_count', type: 'INTEGER NOT NULL DEFAULT 0', default: '0' },
     { table: 'templates', column: 'content', type: 'TEXT NOT NULL DEFAULT \'\'', default: '\'\'' },
+    { table: 'notes', column: 'content_preview', type: 'TEXT NOT NULL DEFAULT \'\'', default: '\'\'' },
   ]
 
   for (const m of migrations) {

@@ -175,7 +175,7 @@ export async function writeFile(path: string, data: Uint8Array | string): Promis
 
   const fileHandle = await getFileHandle(path, true)
   const writable = await fileHandle.createWritable()
-  await writable.write(bytes)
+  await writable.write({ type: 'write', data: bytes })
   await writable.close()
 }
 

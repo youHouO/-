@@ -248,8 +248,8 @@ export async function createNote(volumeId: string, title: string, content = ''):
   const wordCount = content.length
 
   db.run(
-    `INSERT INTO notes (id, volume_id, book_id, title, content_hash, created_at, updated_at, word_count, image_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, volumeId, bookId, title, '', t, t, wordCount, 0],
+    `INSERT INTO notes (id, volume_id, book_id, title, content_hash, content_preview, created_at, updated_at, word_count, image_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, volumeId, bookId, title, '', content.slice(0, 300), t, t, wordCount, 0],
   )
 
   // 更新卷和书的笔记计数
@@ -357,10 +357,13 @@ export async function saveNote(note: Note, content: string): Promise<void> {
     await writeFile(contentPath, content)
   }
 
+  // 生成内容预览（前 300 字符纯文本，用于降级搜索）
+  const contentPreview = content.slice(0, 300)
+
   // 更新数据库元数据
   db.run(
-    `UPDATE notes SET title = ?, content_hash = ?, updated_at = ?, word_count = ?, image_count = ? WHERE id = ? AND updated_at > 0`,
-    [note.title, contentHash, t, wordCount, imageCount, note.id],
+    `UPDATE notes SET title = ?, content_hash = ?, content_preview = ?, updated_at = ?, word_count = ?, image_count = ? WHERE id = ? AND updated_at > 0`,
+    [note.title, contentHash, contentPreview, t, wordCount, imageCount, note.id],
   )
 
   // 更新 FTS 索引（始终使用明文内容，加密后无法搜索）
@@ -496,7 +499,7 @@ export function searchNotes(keyword: string, bookId?: string, limit = 50): Searc
       FROM notes n
       JOIN volumes v ON n.volume_id = v.id
       JOIN books b ON n.book_id = b.id
-      WHERE n.updated_at > 0 AND (n.title LIKE ? OR n.content_hash LIKE ?)
+      WHERE n.updated_at > 0 AND (n.title LIKE ? OR n.content_preview LIKE ?)
     `
     const pattern = `%${keyword}%`
     params = [pattern, pattern]
