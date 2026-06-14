@@ -284,10 +284,9 @@ export async function generateManifest(): Promise<Record<string, string>> {
     for (const row of noteResults[0].values) {
       const noteId = row[0] as string
       const bookId = row[1] as string
-      const volumeId = row[2] as string
       const contentHash = row[3] as string
-      // 笔记文件路径约定: books/{bookId}/volumes/{volumeId}/notes/{noteId}.md
-      const filePath = `books/${bookId}/volumes/${volumeId}/notes/${noteId}.md`
+      // 笔记文件路径约定: Books/{bookId}/Notes/{noteId}.note
+      const filePath = `Books/${bookId}/Notes/${noteId}.note`
       manifest[filePath] = contentHash
     }
   }

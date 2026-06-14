@@ -4,6 +4,8 @@
 
 import { isStorageReady, readFile } from './storage'
 import { getDB } from './database'
+import { getNote } from './note-engine'
+import { decryptToString } from './encryption'
 import JSZip from 'jszip'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -15,15 +17,20 @@ function assertStorageReady() {
 }
 
 /**
- * 从 storage 读取笔记的实际内容
+ * 从 storage 读取笔记的实际内容（自动解密加密笔记）
  */
 async function readNoteContent(noteId: string, bookId: string): Promise<string> {
   const contentPath = `Books/${bookId}/Notes/${noteId}.note`
   const data = await readFile(contentPath)
-  if (data) {
-    return new TextDecoder().decode(data)
+  if (!data) return ''
+
+  // 检查是否加密
+  const note = getNote(noteId)
+  if (note && note.contentHash.startsWith('[ENC]')) {
+    return await decryptToString(data)
   }
-  return ''
+
+  return new TextDecoder().decode(data)
 }
 
 /**
@@ -280,7 +287,7 @@ export async function exportBookAsZip(bookId: string): Promise<Blob> {
 
   // 查询并打包图片
   const imagesRes = db.exec(
-    `SELECT id, book_id, webp_name FROM images WHERE book_id = ?`,
+    `SELECT id, book_id, local_path FROM images WHERE book_id = ?`,
     [bookId],
   )
 
@@ -291,11 +298,10 @@ export async function exportBookAsZip(bookId: string): Promise<Blob> {
     for (const row of imagesRes[0].values) {
       const imageId = row[0] as string
       const imageBookId = row[1] as string
-      const webpName = row[2] as string
+      const localPath = row[2] as string
 
       // 读取图片文件
-      const imagePath = `Books/${imageBookId}/Assets/Images/${webpName}`
-      const imageData = await readFile(imagePath)
+      const imageData = await readFile(localPath)
 
       if (imageData) {
         imagesFolder.file(`${imageId}.webp`, imageData)

@@ -98,7 +98,7 @@ export function TrashPage() {
                         <span>删除于 {formatDate(item.deletedAt)}</span>
                         <span>·</span>
                         <span>{Math.ceil((item.expiresAt - Date.now()) / (24 * 60 * 60 * 1000))} 天后过期</span>
-                        {item.originalPath && <span>· {item.originalPath}</span>}
+                        {item.bookId && <span>· 所属书: {item.bookId}</span>}
                       </div>
                     </div>
                   </div>
