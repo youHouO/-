@@ -235,11 +235,12 @@ export async function initDatabase(
     // 4. 缓存 writeFile 以便后续 saveDB 使用
     writeFileFn = writeFile
 
-    // 5. 若从已有数据加载，检测 FTS5 支持情况并执行 schema 迁移
+    // 5. 执行 schema 迁移（无论新/旧数据库，确保所有列都存在）
+    runMigrations()
+
+    // 6. 若从已有数据加载，检测 FTS5 支持情况
     if (existingData) {
       fts5Available = isFTS5Available()
-      // Schema 迁移：确保所有列都存在
-      runMigrations()
 
       // 如果 FTS5 支持但表不存在，自动创建
       if (!fts5Available) {

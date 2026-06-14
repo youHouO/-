@@ -134,7 +134,7 @@ export function WelcomePicker({
           选择数据存储位置
         </h1>
         <p className="text-gray-500 mb-6">
-          点击下方按钮，在弹出的窗口中选择一个文件夹（推荐选择「文档」），LocalNotes 会自动在其中创建 <span className="font-medium text-gray-700">LocalNotes</span> 子文件夹存放数据。
+          请先在「文档」文件夹下手动创建一个名为 <span className="font-medium text-gray-700">LocalNotes</span> 的文件夹，然后点击下方按钮选择该文件夹作为数据存储位置。
         </p>
 
         {/* 选择文件夹按钮 */}
@@ -152,7 +152,7 @@ export function WelcomePicker({
                 {isPicking ? '请在弹出的窗口中选择文件夹...' : '选择文件夹'}
               </span>
               <p className="text-xs text-gray-400 mt-0.5">
-                选择后自动创建 LocalNotes 子文件夹
+                选择已创建好的 LocalNotes 文件夹
               </p>
             </div>
             <ChevronRight className="w-5 h-5 text-gray-400 shrink-0" />

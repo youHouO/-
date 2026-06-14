@@ -61,7 +61,7 @@ export function CreateModal({ open, onClose, onConfirm, title, placeholder = 'è¯
             onChange={(e) => setName(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
-            className="h-10 focus:ring-0 focus:ring-offset-0"
+            className="h-10 focus-visible:ring-0 focus-visible:ring-offset-0"
           />
         </div>
         <DialogFooter>
